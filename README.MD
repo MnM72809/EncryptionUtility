@@ -26,8 +26,9 @@ The Terminal Encryption App is a command-line application that provides encrypti
 To compile the application, use the following command:
 
 ```sh
-gcc -o TerminalApp (ls *.c) -lssl -lcrypto
+gcc -o app (ls *.c) -g -lssl -lcrypto
 ```
+Make sure to have the OpenSSL library installed on your system, you're in the correct directory, and the `*.c` and `*.h` files are present.
 
 ## Usage
 
