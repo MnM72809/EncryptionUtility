@@ -103,6 +103,8 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Compilation successful." -ForegroundColor Green
 
+Write-Host "Compile command: $compileCommand"
+
 
 Get-Executable -serverAlias $serverAlias -remoteDir $remoteDir -localDir $localDir -program $program
 Write-Host "Program compiled and ready to run." -ForegroundColor Green
