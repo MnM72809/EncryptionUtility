@@ -1,0 +1,36 @@
+# Ignore compiled files
+*.o
+*.out
+*.exe
+app
+app.exe
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+*.swp
+*.bak
+*.old
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+*.code-workspace
+.vs/
+
+# Ignore compile script
+compile.ps1
+
+# Ignore test files
+test.*
+test_*.*
+
+# Ignore CppProperties.json
+.vscode/c_cpp_properties.json
+CppProperties.json
