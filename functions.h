@@ -13,5 +13,6 @@ char* getCurrentWorkingDirectory();
 void infoHandler(void);
 
 void testHandler(void);
+void createFile(const char* filename);
 
 #endif // FUNCTIONS_H

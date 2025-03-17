@@ -23,7 +23,7 @@ char *getKeyContent(int keySource, const char *defaultFilename, const char *prom
 
     if (keySource == 1)
     { // From text
-                char tempPrompt[256];
+        char tempPrompt[256];
         sprintf(tempPrompt, "%s: ", promptMsg);
         keyContent = getString(tempPrompt);
         if (keyContent == NULL || strlen(keyContent) == 0)
@@ -96,14 +96,13 @@ bool handleFileOutput(const char *content, size_t contentLength, bool isBinary)
     // If file does not exist, create it
     if (!fileExists(filename))
     {
-        FILE *file = fopen(filename, "w");
-        if (file == NULL)
+        createFile(filename);
+        if (!fileExists(filename))
         {
             printf("Error: Failed to create output file\n");
             free(filename);
             return false;
         }
-        fclose(file);
     }
 
     printf("Output path: %s\n", filename);
@@ -672,7 +671,7 @@ void decryptHandler()
     int keySource = getMenuSelection(keySourceTitle, keySourceOptions, sizeof(keySourceOptions) / sizeof(keySourceOptions[0]), true);
     if (keySource == 2)
         return;
-    
+
     // Flush stdin
     fflush(stdin);
 
@@ -768,12 +767,12 @@ void decryptHandler()
     if (decryptionMethod == 0) // Public-private key
     {
         publicPrivateKeyDecryption(content, contentLength, &decryptedOutput, &decryptedOutputLength,
-                                  keyContent, keyContentLength, isBase64Input);
+                                   keyContent, keyContentLength, isBase64Input);
     }
     else if (decryptionMethod == 1) // Symmetric key
     {
         symmetricKeyDecryption(content, contentLength, &decryptedOutput, &decryptedOutputLength,
-                              keyContent, keyContentLength, isBase64Input);
+                               keyContent, keyContentLength, isBase64Input);
     }
 
     // Clean up key content when done
@@ -1348,8 +1347,8 @@ void hashHandler()
 
     EVP_MD_CTX_free(mdctx);
     free(content);
-    content = NULL; // Clear content after hashing
-    contentLength = 0; // Clear content length
+    content = NULL;                      // Clear content after hashing
+    contentLength = 0;                   // Clear content length
     hashOutputLength = hash_len * 2 + 1; // Each byte is represented by 2 hex characters + null terminator
     hashOutput = (char *)malloc(hashOutputLength);
     if (hashOutput == NULL)
@@ -1379,15 +1378,14 @@ void hashHandler()
         // Check if file exists
         if (!fileExists(filename))
         {
-            FILE *file = fopen(filename, "w");
-            if (file == NULL)
+            createFile(filename); // Create the file if it doesn't exist
+            if (!fileExists(filename))
             {
                 printf("Error: Failed to create output file\n");
                 free(filename);
                 free(hashOutput);
                 return;
             }
-            fclose(file);
         }
 
         // Save output to file
@@ -1414,6 +1412,6 @@ void hashHandler()
         printf("Hash output:\n%s\n", hashOutput);
     }
     free(hashOutput);
-    hashOutput = NULL; // Clear hash output after use
+    hashOutput = NULL;    // Clear hash output after use
     hashOutputLength = 0; // Clear hash output length
 }

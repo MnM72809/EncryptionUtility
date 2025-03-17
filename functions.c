@@ -438,10 +438,11 @@ void testHandler(void)
     const char *testOptions[] = {
         "Test 1: File path processing",
         "Test 2: File existence check",
+        "Test 3: File creation",
         "Back"};
 
     int selected = getMenuSelection("Choose a test:", testOptions, sizeof(testOptions) / sizeof(testOptions[0]), true);
-    if (selected == 2)
+    if (selected == 3)
     {
         return; // Back to main menu
     }
@@ -490,6 +491,28 @@ void testHandler(void)
             }
         }
         break;
+    case 2:
+        {
+            // Test file creation
+            char *testFile = getString("Enter a file name to create: ");
+            if (testFile == NULL)
+            {
+                printf("Error: Failed to read file name\n");
+                return;
+            }
+            // Create the file
+            createFile(testFile);
+            // Check if the file was created successfully
+            if (fileExists(testFile))
+            {
+                printf("File created successfully: %s\n", testFile);
+            }
+            else
+            {
+                printf("Failed to create file: %s\n", testFile);
+            }
+        }
+        break;
     default:
         printf("Invalid selection.\n");
         break;
@@ -497,4 +520,16 @@ void testHandler(void)
 
     // Repeat the test menu
     testHandler();
+}
+
+void createFile(const char *filename)
+{
+    FILE *file = fopen(filename, "w");
+    if (file == NULL)
+    {
+        printf("Error: Failed to create file: %s\n", filename);
+        return;
+    }
+    fclose(file);
+    printf("File created successfully: %s\n", filename);
 }
