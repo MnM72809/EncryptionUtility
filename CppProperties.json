@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+        "inheritEnvironments": [
+            "mingw_64"
+        ],
+        "name": "Mingw64_Windows",
+        "includePath": [
+            "${env.INCLUDE}",
+            "${workspaceRoot}\\**",
+            "C:\\Users\\MoriaanMichiels\\mingw64\\x86_64-w64-mingw32\\include",
+            "C:\\Users\\MoriaanMichiels\\mingw64"
+        ],
+        "intelliSenseMode": "windows-msvc-x64"
+    },
+    {
+        "inheritEnvironments": [
+            "mingw_64"
+        ],
+        "name": "Mingw64_Linux",
+        "includePath": [
+            "${env.INCLUDE}",
+            "${workspaceRoot}\\**",
+            "C:\\Users\\MoriaanMichiels\\mingw64\\x86_64-w64-mingw32\\include",
+            "C:\\Users\\MoriaanMichiels\\mingw64"
+        ],
+        "intelliSenseMode": "linux-gcc-x64"
+    }
+  ]
+}
