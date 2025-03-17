@@ -428,3 +428,73 @@ void infoHandler(void)
         break;
     }
 }
+
+
+void testHandler(void)
+{
+    printf("Test handler\n");
+    
+    // Choose the test to run
+    const char *testOptions[] = {
+        "Test 1: File path processing",
+        "Test 2: File existence check",
+        "Back"};
+
+    int selected = getMenuSelection("Choose a test:", testOptions, sizeof(testOptions) / sizeof(testOptions[0]), true);
+    if (selected == 2)
+    {
+        return; // Back to main menu
+    }
+
+    // Run the selected test
+    switch (selected)
+    {
+    case 0:
+        {
+            // Test file path processing
+            char *testPath = getString("Enter a file path: ");
+            if (testPath == NULL)
+            {
+                printf("Error: Failed to read path\n");
+                return;
+            }
+            char *processedPath = processPath(testPath);
+            if (processedPath != NULL)
+            {
+                printf("Processed path: %s\n", processedPath);
+                free(processedPath);
+            }
+            else
+            {
+                printf("Failed to process path: %s\n", testPath);
+            }
+        }
+        break;
+    case 1:
+        {
+            // Test file existence check
+            char *testFile = getString("Enter a file name to check: ");
+            if (testFile == NULL)
+            {
+                printf("Error: Failed to read file name\n");
+                return;
+            }
+            // Check if the file exists
+            if (fileExists(testFile))
+            {
+                printf("File exists: %s\n", testFile);
+            }
+            else
+            {
+                printf("File does not exist: %s\n", testFile);
+            }
+        }
+        break;
+    default:
+        printf("Invalid selection.\n");
+        break;
+    }
+
+    // Repeat the test menu
+    testHandler();
+}

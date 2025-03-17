@@ -28,6 +28,7 @@
 void init();
 void loop();
 enum Action askForAction(bool invalid);
+void testHandler();
 
 enum Action
 {
@@ -36,6 +37,7 @@ enum Action
     GenerateKey,
     Hash,
     Info,
+    Test,
     Exit
 };
 
@@ -123,6 +125,9 @@ void loop()
     case Info:
         infoHandler();
         break;
+    case Test:
+        testHandler();
+        break;
     case Exit:
         printf("Exiting...\n");
         exit(0);
@@ -172,13 +177,14 @@ enum Action askForAction(bool invalid)
         "Generate key",
         "Hash",
         "Info",
+        "Test",
         "Exit"};
 
     const char *title = "Choose an action:";
     int selected = getMenuSelection(title, options, sizeof(options) / sizeof(options[0]), true);
 
     // Convert selection to enum
-    if (selected >= 0 && selected < 6)
+    if (selected >= 0 && selected < 7)
     {
         return (enum Action)selected;
     }

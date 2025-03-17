@@ -672,6 +672,9 @@ void decryptHandler()
     int keySource = getMenuSelection(keySourceTitle, keySourceOptions, sizeof(keySourceOptions) / sizeof(keySourceOptions[0]), true);
     if (keySource == 2)
         return;
+    
+    // Flush stdin
+    fflush(stdin);
 
     char *content = NULL; // Will hold either file content or user text
     size_t contentLength = 0;

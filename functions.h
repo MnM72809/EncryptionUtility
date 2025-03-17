@@ -12,4 +12,6 @@ char* readFileContent(const char* filename, size_t* contentLength);
 char* getCurrentWorkingDirectory();
 void infoHandler(void);
 
+void testHandler(void);
+
 #endif // FUNCTIONS_H
