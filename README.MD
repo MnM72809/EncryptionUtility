@@ -54,6 +54,12 @@ gcc -o TerminalApp (ls *.c) -lssl -lcrypto
      - Choose an output destination (File or Text)
      - Choose a hash algorithm (SHA-256, SHA-512, or MD5)
 
+5. **Info**
+     - Display information about the application, including version and author
+
+6. **Exit**
+     - Exit the application
+
 ### Example Commands
 
 #### Encrypt a File
