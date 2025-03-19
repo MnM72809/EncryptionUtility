@@ -27,9 +27,12 @@ Thumbs.db
 # Ignore compile script
 compile.ps1
 
+source.zip
+
 # Ignore test files
 test.*
 test_*.*
+test/
 
 # Ignore CppProperties.json
 .vscode/c_cpp_properties.json
