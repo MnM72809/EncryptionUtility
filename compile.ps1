@@ -81,8 +81,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Compilation on remote..."
 
+$opensslDir = "/home/moriaan/programmeren/deps/openssl-windows/OpenSSL"
+$opensslIncludeDir = "$opensslDir/include"
+$opensslLibDir = "$opensslDir/lib"
+
 $linuxCommand = "gcc -o $program `$(ls *.c)` -g -lssl -lcrypto"
-$windowsCommand = "x86_64-w64-mingw32-gcc -o $program.exe `$(ls *.c)` -g -lws2_32 -lwinmm -lssl -lcrypto -DWINDOWS -std=c99"
+$windowsCommand = "x86_64-w64-mingw32-gcc -o $program.exe `$(ls *.c)` -I$opensslIncludeDir -L$opensslLibDir -g -lws2_32 -lwinmm -lssl -lcrypto -DWINDOWS -std=c99"
 
 if ($os -eq "windows") {
     $compileCommand = "cd $remoteDir && echo Compiling for Windows... && $windowsCommand"
