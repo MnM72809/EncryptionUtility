@@ -16,6 +16,7 @@
 #include <io.h>    // For _setmode()
 #include <fcntl.h> // For _O_U16TEXT
 #include <unistd.h>
+#include <direct.h> // For _chdir()
 #else
 #include <termios.h>   // Terminal control for Linux
 #include <unistd.h>    // POSIX API
@@ -134,14 +135,16 @@ char *getString(const char *prompt)
 }
 
 /**
- * @brief Processes a given file path and performs various checks and transformations based on the operating system.
+ * @brief Processes a given path and performs various checks and transformations based on the operating system.
  *
- * @param path The input file path to be processed. It can be a relative or absolute path.
- * @param mustExist A boolean flag indicating whether the path must exist. If true, the function will check if the path exists.
- *                  If false, the function will check if the parent directory exists, allowing for new file creation.
- *                  In general, input files should exist, while output files may not.
- *
- * @return A newly allocated string containing the processed path, or NULL if an error occurs. The caller is responsible for freeing the returned string.
+ * @param path The input path to be processed. It can be a relative or absolute path to either a file or directory.
+ * @param mustExist A boolean flag indicating whether the path must exist.
+ *                  If true, the function will check if the path exists.
+ *                  If false, for files it will check if the parent directory exists.
+ *                  For directories, it checks if the parent directory exists.
+ * @param isDirectory A boolean flag indicating whether the path is expected to be a directory.
+ *                   If true, the function will handle the path as a directory.
+ *                   If false, the function will handle the path as a file.
  *
  * The function performs the following operations:
  * - Checks if the path is NULL or empty and returns NULL if it is.
@@ -160,28 +163,29 @@ char *getString(const char *prompt)
  *   - Retrieves file attributes if the path exists.
  *
  * Error messages are printed to the standard output in case of failures.
+ *
+ * @return A newly allocated string containing the processed path, or NULL if an error occurs.
+ *         The caller is responsible for freeing the returned string.
  */
-char *processPath(const char *path, bool mustExist)
+char *processPath(const char *path, bool mustExist, bool isDirectory)
 {
-    // If the path is NULL or empty, return NULL
+    // Input validation
     if (path == NULL || strlen(path) == 0)
     {
         printf("Error: Path is NULL or empty\n");
         return NULL;
     }
 
-    // Allocate a buffer for the path
+    // Allocate and initialize buffer
     char *buffer = (char *)malloc(strlen(path) + 1);
     if (buffer == NULL)
     {
         printf("Error: Memory allocation failed\n");
         return NULL;
     }
-
-    // Copy the path to the buffer
     strcpy(buffer, path);
 
-    // Check if the path is enclosed in quotes and remove them if present
+    // Remove enclosing quotes if present
     if (buffer[0] == '\"' && buffer[strlen(buffer) - 1] == '\"')
     {
         buffer[strlen(buffer) - 1] = '\0';
@@ -195,9 +199,7 @@ char *processPath(const char *path, bool mustExist)
     for (int i = 0; buffer[i]; i++)
     {
         if (buffer[i] == '/')
-        {
             buffer[i] = '\\';
-        }
     }
 
     // Convert to absolute path
@@ -209,7 +211,7 @@ char *processPath(const char *path, bool mustExist)
         return NULL;
     }
 
-    // Free the original buffer and allocate a new one for the resolved path
+    // Update buffer with resolved path
     free(buffer);
     buffer = (char *)malloc(strlen(resolvedPath) + 1);
     if (buffer == NULL)
@@ -221,58 +223,85 @@ char *processPath(const char *path, bool mustExist)
     strcpy(buffer, resolvedPath);
     free(resolvedPath);
 
-    /* printf("Given path: %s\n", path);
-    printf("Processed path: %s\n", buffer); */
-
-    // Check if the path exists - only required if mustExist is true
-    if (mustExist && _access(buffer, 0) == -1)
+    // Handle existence checks
+    if (mustExist)
     {
-        printf("Path does not exist: %s\n", buffer);
-        free(buffer);
-        return NULL;
-    }
-
-    // If creating a new file, check if the directory exists
-    if (!mustExist)
-    {
-        char *lastSlash = strrchr(buffer, '\\');
-        if (lastSlash != NULL)
+        // Path must exist
+        if (_access(buffer, 0) == -1)
         {
-            // Temporarily cut the string at the last backslash
-            char lastChar = *lastSlash;
-            *lastSlash = '\0';
+            printf("Path does not exist: %s\n", buffer);
+            free(buffer);
+            return NULL;
+        }
 
-            // Check if the directory exists
-            if (_access(buffer, 0) == -1)
+        // If it's supposed to be a directory, verify that
+        if (isDirectory)
+        {
+            DWORD attributes = GetFileAttributesA(buffer);
+            if (attributes == INVALID_FILE_ATTRIBUTES)
             {
-                printf("Directory does not exist: %s\n", buffer);
+                printf("Error: Failed to get file attributes\n");
                 free(buffer);
                 return NULL;
             }
 
-            // Restore the string
-            *lastSlash = lastChar;
+            if (!(attributes & FILE_ATTRIBUTE_DIRECTORY))
+            {
+                printf("Error: Path is not a directory: %s\n", buffer);
+                free(buffer);
+                return NULL;
+            }
         }
     }
-
-    // Check attributes only if the path exists
-    if (_access(buffer, 0) != -1)
+    else
     {
-        DWORD attributes = GetFileAttributesA(buffer);
-        if (attributes == INVALID_FILE_ATTRIBUTES)
+        // Path doesn't need to exist
+        if (isDirectory)
         {
-            printf("Error: Failed to get file attributes\n");
-            free(buffer);
-            return NULL;
+            // For directories, check if parent directory exists (if this is not root)
+            char *lastSlash = strrchr(buffer, '\\');
+            if (lastSlash != NULL && lastSlash != buffer) // Not root directory
+            {
+                char lastChar = *lastSlash;
+                *lastSlash = '\0';
+
+                if (_access(buffer, 0) == -1)
+                {
+                    printf("Parent directory does not exist: %s\n", buffer);
+                    free(buffer);
+                    return NULL;
+                }
+
+                *lastSlash = lastChar;
+            }
+        }
+        else
+        {
+            // For files, check if parent directory exists
+            char *lastSlash = strrchr(buffer, '\\');
+            if (lastSlash != NULL)
+            {
+                char lastChar = *lastSlash;
+                *lastSlash = '\0';
+
+                if (_access(buffer, 0) == -1)
+                {
+                    printf("Directory does not exist: %s\n", buffer);
+                    free(buffer);
+                    return NULL;
+                }
+
+                *lastSlash = lastChar;
+            }
         }
     }
 
 #elif __linux__
     // Linux path processing
 
-    // For existing paths or when mustExist is true
     if (mustExist || access(buffer, F_OK) != -1)
     {
+        // Path exists or must exist
         char *resolvedPath = realpath(buffer, NULL);
         if (resolvedPath == NULL)
         {
@@ -281,11 +310,10 @@ char *processPath(const char *path, bool mustExist)
             return NULL;
         }
 
-        // Free original buffer and use resolved path
         free(buffer);
         buffer = resolvedPath;
 
-        // Check if the path exists (only matters if mustExist is true)
+        // Check existence if required
         if (mustExist && access(buffer, F_OK) == -1)
         {
             printf("Path does not exist: %s\n", buffer);
@@ -293,8 +321,8 @@ char *processPath(const char *path, bool mustExist)
             return NULL;
         }
 
-        // Check file attributes if the path exists
-        if (access(buffer, F_OK) != -1)
+        // Verify it's a directory if needed
+        if (isDirectory && access(buffer, F_OK) != -1)
         {
             struct stat pathStat;
             if (stat(buffer, &pathStat) == -1)
@@ -303,42 +331,69 @@ char *processPath(const char *path, bool mustExist)
                 free(buffer);
                 return NULL;
             }
+
+            if (!S_ISDIR(pathStat.st_mode))
+            {
+                printf("Error: Path is not a directory: %s\n", buffer);
+                free(buffer);
+                return NULL;
+            }
         }
     }
     else
     {
-        // Handle non-existent path (for file creation)
+        // Non-existent path handling
 
-        // Extract directory path
-        char *lastSlash = strrchr(buffer, '/');
-        if (lastSlash != NULL)
+        if (isDirectory)
         {
-            // Temporarily cut string at the last slash
-            char lastChar = *lastSlash;
-            *lastSlash = '\0';
-
-            // Empty directory means current directory
-            if (strlen(buffer) == 0)
+            // For directories, check if parent directory exists
+            char *lastSlash = strrchr(buffer, '/');
+            if (lastSlash != NULL && lastSlash != buffer) // Not root
             {
-                strcpy(buffer, ".");
-            }
+                char lastChar = *lastSlash;
+                *lastSlash = '\0';
 
-            // Check if directory exists
-            if (access(buffer, F_OK) == -1)
+                // Empty directory means current directory
+                if (strlen(buffer) == 0)
+                    strcpy(buffer, ".");
+
+                if (access(buffer, F_OK) == -1)
+                {
+                    printf("Parent directory does not exist: %s\n", buffer);
+                    free(buffer);
+                    return NULL;
+                }
+
+                *lastSlash = lastChar;
+            }
+        }
+        else
+        {
+            // For files, check if parent directory exists
+            char *lastSlash = strrchr(buffer, '/');
+            if (lastSlash != NULL)
             {
-                printf("Directory does not exist: %s\n", buffer);
-                free(buffer);
-                return NULL;
-            }
+                char lastChar = *lastSlash;
+                *lastSlash = '\0';
 
-            // Restore the path
-            *lastSlash = lastChar;
+                // Empty directory means current directory
+                if (strlen(buffer) == 0)
+                    strcpy(buffer, ".");
+
+                if (access(buffer, F_OK) == -1)
+                {
+                    printf("Directory does not exist: %s\n", buffer);
+                    free(buffer);
+                    return NULL;
+                }
+
+                *lastSlash = lastChar;
+            }
         }
 
-        // Convert to absolute path if it's a relative path
+        // Convert to absolute path if relative
         if (buffer[0] != '/')
         {
-            // Get current working directory
             char *cwd = getcwd(NULL, 0);
             if (cwd == NULL)
             {
@@ -347,7 +402,6 @@ char *processPath(const char *path, bool mustExist)
                 return NULL;
             }
 
-            // Create absolute path
             char *absolutePath = malloc(strlen(cwd) + strlen(buffer) + 2);
             if (absolutePath == NULL)
             {
@@ -356,15 +410,13 @@ char *processPath(const char *path, bool mustExist)
                 free(cwd);
                 return NULL;
             }
+
             sprintf(absolutePath, "%s/%s", cwd, buffer);
             free(buffer);
             free(cwd);
             buffer = absolutePath;
         }
     }
-
-    /* printf("Given path: %s\n", path);
-    printf("Processed path: %s\n", buffer); */
 #endif
 
     return buffer;
@@ -383,12 +435,11 @@ bool fileExists(const char *filename)
 
 char *readFileContent(const char *filename, size_t *contentLength)
 {
-    // Open the file
-    FILE *file = fopen(filename, "r");
+    // Open the file in binary mode to avoid CR+LF translation
+    FILE *file = fopen(filename, "rb");
     if (file == NULL)
     {
         printf("Error: File not found or cannot be opened");
-        system("pause");
         return NULL;
     }
 
@@ -411,8 +462,9 @@ char *readFileContent(const char *filename, size_t *contentLength)
     size_t bytesRead = fread(content, 1, fileSize, file);
     if (bytesRead != fileSize)
     {
-        printf("Error: Error reading file");
-        if (sizeof(content) < 256)
+        printf("Error: Error reading file\n");
+        printf("File: %s\n", filename);
+        if (fileSize < 256)
         {
             printf("Buffer: %s\n", content);
         }
@@ -422,6 +474,11 @@ char *readFileContent(const char *filename, size_t *contentLength)
         }
         printf("Bytes read: %zu\n", bytesRead);
         printf("File size: %ld\n", fileSize);
+        printf("ferror result: %d\n", ferror(file));
+        if (ferror(file))
+        {
+            printf("Error message: %s\n", strerror(errno));
+        }
         fclose(file);
         free(content);
         return NULL;
@@ -431,7 +488,7 @@ char *readFileContent(const char *filename, size_t *contentLength)
     fclose(file);
 
     // Null-terminate buffer
-    content[fileSize] = '\0';
+    content[bytesRead] = '\0';
 
     return content;
 }
@@ -585,7 +642,7 @@ void testHandler(void)
             return;
         }
         printf("Processing path (entering function): %s\n", testPath);
-        char *processedPath = processPath(testPath, false);
+        char *processedPath = processPath(testPath, false, false);
         printf("Processed path, evaluating (after function): %s\n", processedPath);
         printf("Given path (input): %s\n", testPath);
         printf("Processed path (output): %s\n", processedPath);
@@ -676,4 +733,54 @@ bool createFile(const char *filename)
     }
     /* printf("File created successfully: %s\n", filename); */
     return true;
+}
+
+// Add a function to change the working directory
+bool changeWorkingDirectory(const char *newDir)
+{
+    int result;
+
+#ifdef _WIN32
+    result = _chdir(newDir);
+#else
+    result = chdir(newDir);
+#endif
+
+    if (result == 0)
+    {
+        printf("Changed directory to: %s\n", newDir);
+        return true;
+    }
+    else
+    {
+        perror("Failed to change directory");
+        return false;
+    }
+}
+
+void changeDirHandler()
+{
+    char *newDir = getString("Enter the new directory: ");
+    if (newDir == NULL)
+    {
+        printf("Error: Failed to read directory name\n");
+        return;
+    }
+
+    // Process the new directory path
+    newDir = processPath(newDir, false, true);
+    if (newDir == NULL)
+    {
+        printf("Error: Failed to process directory path\n");
+        free(newDir);
+        return;
+    }
+
+    // Change the working directory
+    if (!changeWorkingDirectory(newDir))
+    {
+        printf("Error: Failed to change directory\n");
+    }
+
+    free(newDir);
 }

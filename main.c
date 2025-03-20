@@ -37,6 +37,7 @@ enum Action
     GenerateKey,
     Hash,
     Info,
+    ChangeDirectory,
     Test,
     Exit
 };
@@ -125,6 +126,9 @@ void loop(int argc, char *argv[])
     case Info:
         infoHandler();
         break;
+    case ChangeDirectory:
+        changeDirHandler();
+        break;
     case Test:
         testHandler();
         break;
@@ -132,7 +136,7 @@ void loop(int argc, char *argv[])
         printf("Exiting...\n");
         exit(0);
     default:
-        printf("Invalid action (how did you get here?)\n"); // Should never happen
+        printf("Invalid action (how did you get here?) probably a bug\n"); // Should never happen
 #ifdef _WIN32
         Sleep(1000);
 #else
@@ -197,6 +201,7 @@ enum Action askForAction(bool invalid, int argc, char *argv[])
     options[optionCount++] = "Generate key";
     options[optionCount++] = "Hash";
     options[optionCount++] = "Info";
+    options[optionCount++] = "Change Directory";
     
     // Only include Test option if testOption is true
     if (testOption) {
@@ -212,14 +217,14 @@ enum Action askForAction(bool invalid, int argc, char *argv[])
     // Convert selection to enum
     if (selected >= 0 && selected < optionCount) {
         // Map selection to enum value
-        if (selected < 5) {
-            // First 5 options (0-4) map directly
+        if (selected < 6) {
+            // First 6 options (0-5) map directly
             return (enum Action)selected;
         } else if (selected == optionCount - 1) {
             // Last option is always Exit
             return Exit;
-        } else if (testOption && selected == 5) {
-            // If testOption is true and we selected position 5, it's Test
+        } else if (testOption && selected == 6) {
+            // If testOption is true and we selected position 6, it's Test
             return Test;
         }
     } else if (selected == -1) { // ESC key
@@ -227,6 +232,7 @@ enum Action askForAction(bool invalid, int argc, char *argv[])
     }
 
     // This should never happen with our implementation
+    printf("Invalid selection (how did you get here?) probably a bug\n");
     return askForAction(true, argc, argv);
 }
 
