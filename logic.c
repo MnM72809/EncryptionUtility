@@ -74,7 +74,7 @@ char *getKeyContent(int keySource, const char *defaultFilename, const char *prom
         }
 
         // Read file content
-        keyContent = readFileContent(filename, &keyContentLength);
+        keyContent = readFileContent(filename, &keyContentLength, true);
         if (keyContent == NULL)
         {
             printf("Error: Failed to read key file\n");
@@ -211,7 +211,7 @@ void encryptHandler()
         }
 
         // Read file content using the new function
-        content = readFileContent(filename, &contentLength);
+        content = readFileContent(filename, &contentLength, true);  // Use binary mode for encryption
         if (content == NULL)
         {
             free(filename);
@@ -716,7 +716,7 @@ void decryptHandler()
         }
 
         // Read file content using the new function
-        content = readFileContent(filename, &contentLength);
+        content = readFileContent(filename, &contentLength, true);  // Use binary mode for decryption
         if (content == NULL)
         {
             free(filename);
@@ -1333,7 +1333,7 @@ void hashHandler()
         }
 
         // Read file content using the new function
-        content = readFileContent(filename, &contentLength);
+        content = readFileContent(filename, &contentLength, true);  // Use binary mode for hashing
         if (content == NULL)
         {
             free(filename);

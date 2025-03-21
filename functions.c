@@ -186,7 +186,8 @@ char *processPath(const char *path, bool mustExist, bool isDirectory)
     strcpy(buffer, path);
 
     // Remove enclosing quotes if present
-    if (buffer[0] == '\"' && buffer[strlen(buffer) - 1] == '\"')
+    if ((buffer[0] == '\"' && buffer[strlen(buffer) - 1] == '\"') ||
+        (buffer[0] == '\'' && buffer[strlen(buffer) - 1] == '\''))
     {
         buffer[strlen(buffer) - 1] = '\0';
         memmove(buffer, buffer + 1, strlen(buffer));
@@ -433,62 +434,202 @@ bool fileExists(const char *filename)
     return false;
 }
 
-char *readFileContent(const char *filename, size_t *contentLength)
+/**
+ * @brief Improved version of readFileContent that handles various text encodings.
+ *
+ * This function automatically detects file encoding from BOM markers and
+ * converts content to standard UTF-8/ASCII for consistent handling.
+ *
+ * @param filename The path to the file to be read.
+ * @param contentLength A pointer to a size_t variable where the length of the
+ *                      file content will be stored.
+ * @param isBinary A boolean flag indicating whether to treat as binary (true)
+ *                 or detect and convert encoding (false).
+ * @return A pointer to the dynamically allocated string containing the file
+ *         content, or NULL if an error occurs.
+ */
+char *readFileContent(const char *filename, size_t *contentLength, bool isBinary)
 {
-    // Open the file in binary mode to avoid CR+LF translation
+    // Always open in binary mode first to check for BOM
     FILE *file = fopen(filename, "rb");
     if (file == NULL)
     {
-        printf("Error: File not found or cannot be opened");
+        printf("Error: File not found or cannot be opened: %s\n", filename);
+        printf("Error message: %s\n", strerror(errno));
         return NULL;
     }
 
     // Get file size
-    fseek(file, 0, SEEK_END);
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        printf("Error: Could not seek in file: %s\n", filename);
+        fclose(file);
+        return NULL;
+    }
     long fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    *contentLength = fileSize;
+    if (fileSize < 0)
+    {
+        printf("Error: Could not determine file size: %s\n", filename);
+        fclose(file);
+        return NULL;
+    }
+    rewind(file); // Back to beginning
 
-    // Allocate buffer
+    // Allocate memory for file content plus null terminator
     char *content = (char *)malloc(fileSize + 1);
     if (content == NULL)
     {
-        printf("Error: Memory allocation failed");
+        printf("Error: Memory allocation failed for file: %s\n", filename);
         fclose(file);
         return NULL;
     }
 
-    // Read file into buffer
+    // Read entire file at once
     size_t bytesRead = fread(content, 1, fileSize, file);
-    if (bytesRead != fileSize)
+    if (bytesRead != (size_t)fileSize)
     {
-        printf("Error: Error reading file\n");
-        printf("File: %s\n", filename);
-        if (fileSize < 256)
-        {
-            printf("Buffer: %s\n", content);
-        }
-        else
-        {
-            printf("Buffer is too large to display (> 256 characters)\n");
-        }
-        printf("Bytes read: %zu\n", bytesRead);
-        printf("File size: %ld\n", fileSize);
-        printf("ferror result: %d\n", ferror(file));
+        printf("Error: Could not read entire file: %s\n", filename);
+        printf("Expected %ld bytes, got %zu bytes\n", fileSize, bytesRead);
         if (ferror(file))
         {
             printf("Error message: %s\n", strerror(errno));
         }
-        fclose(file);
         free(content);
+        fclose(file);
         return NULL;
     }
 
-    // Close file
+    // Null-terminate the buffer
+    content[bytesRead] = '\0';
     fclose(file);
 
-    // Null-terminate buffer
-    content[bytesRead] = '\0';
+    // If binary mode requested, return as-is
+    if (isBinary)
+    {
+        *contentLength = bytesRead;
+        return content;
+    }
+
+    // Otherwise, detect encoding and convert if needed
+    enum Encoding
+    {
+        ENC_ASCII,
+        ENC_UTF8,
+        ENC_UTF16LE,
+        ENC_UTF16BE,
+        ENC_UTF32LE,
+        ENC_UTF32BE
+    } encoding = ENC_ASCII;
+
+    size_t skipBytes = 0;
+
+    // Detect encoding from BOM
+    if (bytesRead >= 2)
+    {
+        if (bytesRead >= 4 &&
+            (unsigned char)content[0] == 0xFF &&
+            (unsigned char)content[1] == 0xFE &&
+            (unsigned char)content[2] == 0x00 &&
+            (unsigned char)content[3] == 0x00)
+        {
+            encoding = ENC_UTF32LE;
+            skipBytes = 4;
+        }
+        else if (bytesRead >= 4 &&
+                 (unsigned char)content[0] == 0x00 &&
+                 (unsigned char)content[1] == 0x00 &&
+                 (unsigned char)content[2] == 0xFE &&
+                 (unsigned char)content[3] == 0xFF)
+        {
+            encoding = ENC_UTF32BE;
+            skipBytes = 4;
+        }
+        else if ((unsigned char)content[0] == 0xFF &&
+                 (unsigned char)content[1] == 0xFE)
+        {
+            encoding = ENC_UTF16LE;
+            skipBytes = 2;
+        }
+        else if ((unsigned char)content[0] == 0xFE &&
+                 (unsigned char)content[1] == 0xFF)
+        {
+            encoding = ENC_UTF16BE;
+            skipBytes = 2;
+        }
+        else if (bytesRead >= 3 &&
+                 (unsigned char)content[0] == 0xEF &&
+                 (unsigned char)content[1] == 0xBB &&
+                 (unsigned char)content[2] == 0xBF)
+        {
+            encoding = ENC_UTF8;
+            skipBytes = 3;
+        }
+    }
+
+    // Convert to ASCII/UTF-8 if necessary
+    char *convertedContent = NULL;
+
+    if (encoding == ENC_ASCII || encoding == ENC_UTF8)
+    {
+        // Just skip the BOM if present
+        if (skipBytes > 0)
+        {
+            convertedContent = strdup(content + skipBytes);
+            free(content);
+            content = convertedContent;
+            *contentLength = bytesRead - skipBytes;
+        }
+        else
+        {
+            *contentLength = bytesRead;
+        }
+    }
+    else if (encoding == ENC_UTF16LE)
+    {
+        // Convert UTF-16LE to ASCII/UTF-8
+        size_t utf16Length = (bytesRead - skipBytes) / 2;
+        convertedContent = (char *)malloc(utf16Length + 1);
+        if (convertedContent)
+        {
+            // Simple conversion - just take every other byte
+            size_t j = 0;
+            for (size_t i = skipBytes; i < bytesRead; i += 2)
+            {
+                convertedContent[j++] = content[i];
+            }
+            convertedContent[j] = '\0';
+            free(content);
+            content = convertedContent;
+            *contentLength = j;
+        }
+    }
+    else if (encoding == ENC_UTF16BE)
+    {
+        // Convert UTF-16BE to ASCII/UTF-8
+        size_t utf16Length = (bytesRead - skipBytes) / 2;
+        convertedContent = (char *)malloc(utf16Length + 1);
+        if (convertedContent)
+        {
+            // Simple conversion - just take every other byte
+            size_t j = 0;
+            for (size_t i = skipBytes + 1; i < bytesRead; i += 2)
+            {
+                convertedContent[j++] = content[i];
+            }
+            convertedContent[j] = '\0';
+            free(content);
+            content = convertedContent;
+            *contentLength = j;
+        }
+    }
+    else
+    {
+        // UTF-32 is complex - provide a placeholder and warning
+        printf("Warning: UTF-32 encoding detected in file %s. Only ASCII content will be displayed.\n", filename);
+        free(content);
+        content = strdup("[UTF-32 content not properly displayed]");
+        *contentLength = strlen(content);
+    }
 
     return content;
 }
@@ -783,4 +924,209 @@ void changeDirHandler()
     }
 
     free(newDir);
+}
+
+void configHandler(const char *configFile)
+{
+#define DEFAULT_CONFIG_FILE "config.conf"
+// Use a single log entry for function start
+#ifdef DEBUG
+    printf("Config handler called with file: %s\n", configFile ? configFile : "NULL");
+#endif
+
+    // If no config file specified, use default
+    if (configFile == NULL || strlen(configFile) == 0)
+    {
+        configFile = DEFAULT_CONFIG_FILE;
+#ifdef DEBUG
+        printf("Using default config file: %s\n", configFile);
+#endif
+    }
+
+    // Check if file exists
+    bool exists = fileExists(configFile);
+    if (!exists)
+    {
+#ifdef DEBUG
+        printf("Config file not found: %s\n", configFile);
+#endif
+
+        // Try default config file if not already trying it
+        if (strcmp(configFile, DEFAULT_CONFIG_FILE) != 0)
+        {
+            configFile = DEFAULT_CONFIG_FILE;
+#ifdef DEBUG
+            printf("Trying default config file: %s\n", configFile);
+#endif
+            exists = fileExists(configFile);
+        }
+    }
+
+    if (exists)
+    {
+#ifdef DEBUG
+        printf("Config file exists: %s\n", configFile);
+#endif
+
+        // Process the path to get the absolute path
+        char *configFilePath = processPath(configFile, true, false);
+        if (configFilePath == NULL)
+        {
+            printf("Error: Failed to process config file path\n");
+            return;
+        }
+
+#ifdef DEBUG
+        printf("Processed config file path: %s\n", configFilePath);
+#endif
+
+        // Read the config file with automatic encoding detection (isBinary = false)
+        size_t contentLength;
+        char *content = readFileContent(configFilePath, &contentLength, false);
+
+        if (content != NULL)
+        {
+            // Keep file size info as it might be useful in all builds
+            printf("Config file loaded: %zu bytes\n", contentLength);
+
+#ifdef DEBUG
+            // Print the content (only in debug builds)
+            printf("Config file content:\n%s\n", content);
+
+            // Get additional info about the content string
+            printf("Content length: %zu\n", contentLength);
+            printf("Content (first 20 chars): ");
+
+            // Print first 20 chars safely
+            size_t safeLen = strlen(content);
+            safeLen = (safeLen > 20) ? 20 : safeLen;
+
+            for (size_t i = 0; i < safeLen; i++)
+            {
+                printf("%c", content[i]);
+            }
+            printf("...\n");
+#endif
+
+            // Parse the content
+            if (!parseConfigFile(content))
+            {
+                printf("Error: Failed to parse config file\n");
+            }
+            else
+            {
+                printf("Config file parsed successfully\n");
+            }
+
+            free(content);
+        }
+        else
+        {
+            printf("Error: Failed to read config file\n");
+        }
+
+        free(configFilePath);
+    }
+    else
+    {
+        printf("Error: Config file not found\n");
+    }
+}
+
+bool parseConfigFile(const char *content)
+{
+    if (content == NULL)
+        return false;
+
+    // Copy the content for safe tokenization
+    char *copy = strdup(content);
+    if (!copy)
+        return false;
+
+    // Change line endings to Unix-style (LF)
+    for (size_t i = 0; i < strlen(copy); i++)
+    {
+        if (copy[i] == '\r')
+        {
+            if (copy[i + 1] != '\0' && copy[i + 1] == '\n')
+            {
+                copy[i] = '\n';
+                memmove(copy + i + 1, copy + i + 2, strlen(copy) - i - 1);
+                copy[strlen(copy) - 1] = '\0'; // Null-terminate
+                i--;                           // Adjust index
+            }
+            else
+            {
+                copy[i] = '\n';
+            }
+        }
+    }
+
+    // DEBUG: Print the content to be parsed in hex
+    printf("Parsing config file content after newline normalisation (hex): ");
+    for (size_t i = 0; i < strlen(copy); i++)
+    {
+        printf("%02X ", (unsigned char)copy[i]);
+    }
+    printf("\n");
+
+    char *line = strtok(copy, "\n");
+    printf("Parsed line: %s\n", line);
+    while (line)
+    {
+        // TODO: Implement parsing logic in detail
+        line = strtok(NULL, "\n");
+        printf("Parsed line: %s\n", line);
+    }
+
+    free(copy);
+    return true;
+}
+
+void sigHandler(int signum)
+{
+/*
+signal(SIGINT, sigHandler);  // Ctrl+C
+signal(SIGTERM, sigHandler); // Termination request
+signal(SIGSEGV, sigHandler); // Segmentation fault
+signal(SIGABRT, sigHandler); // Abort signal
+signal(SIGQUIT, sigHandler); // Quit signal
+signal(SIGILL, sigHandler);  // Illegal instruction
+*/
+#ifdef _WIN32
+#define SIGQUIT 3
+#define SIGILL 4
+#define SIGABRT 6
+#define SIGSEGV 11
+#define SIGTERM 15
+#define SIGINT 2
+
+    // Windows-specific signal handling
+    if (signum == SIGINT)
+    {
+        printf("\nCtrl+C pressed. Exiting...\n");
+    }
+    else if (signum == SIGTERM)
+    {
+        printf("\nTermination request received. Exiting...\n");
+    }
+    else if (signum == SIGSEGV)
+    {
+        printf("\nSegmentation fault occurred. Exiting...\n");
+    }
+    else if (signum == SIGABRT)
+    {
+        printf("\nAbort signal received. Exiting...\n");
+    }
+    else if (signum == SIGQUIT)
+    {
+        printf("\nQuit signal received. Exiting...\n");
+    }
+    printf("\nSignal %d received. Exiting...\n", signum);
+#else
+    printf("\nSignal %d received (%s). Exiting...\n", signum, strsignal(signum));
+#endif
+    // Restore console
+    /* restoreConsole(); */
+    exit(signum);
 }
